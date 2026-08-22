@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  ADMIN
+  PROJECT_MANAGER
+  STAFF
+  VIEWER
+}
+
+enum ProjectType {
+  NSO
+  RENEWAL
+  RELOCATION
+  OTHER
+}
+
+enum HighlandsStatus {
+  PENDING
+  ON_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum InfrastructureStatus {
+  NOT_STARTED
+  SURVEYING
+  DEPLOYING
+  COMPLETED
+  BLOCKED
+}
+
+enum IssueStatus {
+  NONE
+  OPEN
+  RESOLVED
+}
+
+enum ReminderStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum ReminderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        RoleName @unique
+  description String?  @db.VarChar(255)
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id                    Int        @id @default(autoincrement())
+  name                  String     @db.VarChar(120)
+  email                 String     @unique @db.VarChar(190)
+  passwordHash          String     @map("password_hash") @db.VarChar(255)
+  refreshTokenHash      String?    @map("refresh_token_hash") @db.VarChar(255)
+  phone                 String?    @db.VarChar(24)
+  roleId                Int        @map("role_id")
+  isActive              Boolean    @default(true) @map("is_active")
+  mustChangePassword    Boolean    @default(false) @map("must_change_password")
+  lastLoginAt           DateTime?  @map("last_login_at")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+  role                  Role       @relation(fields: [roleId], references: [id])
+  createdSites          Site[]     @relation("CreatedSites")
+  updatedSites          Site[]     @relation("UpdatedSites")
+  notes                 SiteNote[]
+  remindersAssigned     Reminder[] @relation("ReminderAssignee")
+  remindersCreated      Reminder[] @relation("ReminderCreator")
+  auditLogs             AuditLog[]
+
+  @@map("users")
+}
+
+model StoreType {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(80)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  sites     Site[]
+
+  @@map("store_types")
+}
+
+model Site {
+  id                              Int                  @id @default(autoincrement())
+  projectType                     ProjectType          @default(NSO) @map("project_type")
+  highlandsStatus                 HighlandsStatus     @default(PENDING) @map("highlands_status")
+  province                        String               @db.VarChar(100)
+  taxCode                         String?              @map("tax_code") @db.VarChar(30)
+  storeTypeId                     Int?                 @map("store_type_id")
+  storeName                       String               @map("store_name") @db.VarChar(190)
+  address                         String               @db.Text
+  sitePossessionDate              DateTime?            @map("site_possession_date") @db.Date
+  highlandsPicName                String?              @map("highlands_pic_name") @db.VarChar(120)
+  highlandsPicPhone               String?              @map("highlands_pic_phone") @db.VarChar(24)
+  viettelSignalHandoverDate       DateTime?            @map("viettel_signal_handover_date") @db.Date
+  ftelContractNumber              String?              @map("ftel_contract_number") @db.VarChar(80)
+  pppoeUsername                   String?              @map("pppoe_username") @db.VarChar(120)
+  pppoePasswordEncrypted          String?              @map("pppoe_password_encrypted") @db.Text
+  onlineDateTime                  DateTime?            @map("online_date_time")
+  configurationCompletedAt        DateTime?            @map("configuration_completed_at")
+  outdoorStatus                   InfrastructureStatus @default(NOT_STARTED) @map("outdoor_status")
+  indoorStatus                    InfrastructureStatus @default(NOT_STARTED) @map("indoor_status")
+  infrastructureCompletedDate     DateTime?            @map("infrastructure_completed_date") @db.Date
+  surveyContactPhone              String?              @map("survey_contact_phone") @db.VarChar(24)
+  note                            String?              @db.Text
+  issueStatus                     IssueStatus          @default(NONE) @map("issue_status")
+  issueContent                    String?              @map("issue_content") @db.Text
+  targetOnlineAt                  DateTime?            @map("target_online_at")
+  createdById                     Int                  @map("created_by")
+  updatedById                     Int                  @map("updated_by")
+  createdAt                       DateTime             @default(now()) @map("created_at")
+  updatedAt                       DateTime             @updatedAt @map("updated_at")
+  deletedAt                       DateTime?            @map("deleted_at")
+  storeType                       StoreType?           @relation(fields: [storeTypeId], references: [id])
+  createdBy                       User                 @relation("CreatedSites", fields: [createdById], references: [id])
+  updatedBy                       User                 @relation("UpdatedSites", fields: [updatedById], references: [id])
+  notes                           SiteNote[]
+  reminders                       Reminder[]
+
+  @@index([highlandsStatus])
+  @@index([province])
+  @@index([storeName])
+  @@index([taxCode])
+  @@index([sitePossessionDate])
+  @@index([onlineDateTime])
+  @@index([targetOnlineAt])
+  @@index([deletedAt])
+  @@map("sites")
+}
+
+model SiteNote {
+  id          Int      @id @default(autoincrement())
+  siteId      Int      @map("site_id")
+  content     String   @db.Text
+  createdById Int      @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@index([siteId, createdAt])
+  @@map("site_notes")
+}
+
+model Reminder {
+  id          Int              @id @default(autoincrement())
+  siteId      Int?             @map("site_id")
+  title       String           @db.VarChar(190)
+  description String?          @db.Text
+  dueAt       DateTime         @map("due_at")
+  priority    ReminderPriority @default(MEDIUM)
+  status      ReminderStatus   @default(OPEN)
+  assigneeId  Int              @map("assignee_id")
+  createdById Int              @map("created_by")
+  completedAt DateTime?        @map("completed_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  site        Site?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  assignee    User             @relation("ReminderAssignee", fields: [assigneeId], references: [id])
+  createdBy   User             @relation("ReminderCreator", fields: [createdById], references: [id])
+
+  @@index([assigneeId, status, dueAt])
+  @@index([siteId])
+  @@map("reminders")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  action     String   @db.VarChar(80)
+  entityType String   @map("entity_type") @db.VarChar(80)
+  entityId   String?  @map("entity_id") @db.VarChar(80)
+  fieldName  String?  @map("field_name") @db.VarChar(100)
+  oldValue   String?  @map("old_value") @db.Text
+  newValue   String?  @map("new_value") @db.Text
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  userAgent  String?  @map("user_agent") @db.VarChar(500)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
