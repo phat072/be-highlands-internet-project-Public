@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, RoleName } from '@prisma/client';
+import { HighlandsStatus, Prisma, RoleName } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../common/current-user.decorator';
 import { EncryptionService } from '../common/encryption.service';
@@ -13,6 +13,36 @@ export class SitesService {
   private sanitize<T extends { pppoePasswordEncrypted?: string | null }>(site: T) {
     const { pppoePasswordEncrypted: _secret, ...safe } = site;
     return { ...safe, hasPppoePassword: Boolean(_secret) };
+  }
+  private isDeploymentComplete(site: Record<string, unknown>) {
+    return Boolean(
+      site.sitePossessionDate
+      && site.outdoorStatus === 'COMPLETED'
+      && site.indoorStatus === 'COMPLETED'
+      && site.viettelSignalHandoverDate
+      && site.onlineDateTime
+      && site.configurationCompletedAt,
+    );
+  }
+  private automaticStatus(site: Record<string, unknown>, requested?: HighlandsStatus) {
+    if (this.isDeploymentComplete(site)) return HighlandsStatus.DONE;
+    return requested === HighlandsStatus.DONE ? HighlandsStatus.ON_PROGRESS : requested;
+  }
+  private async syncCompletedStatuses(id?: number) {
+    await this.prisma.site.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        highlandsStatus: { not: HighlandsStatus.DONE },
+        sitePossessionDate: { not: null },
+        outdoorStatus: 'COMPLETED',
+        indoorStatus: 'COMPLETED',
+        viettelSignalHandoverDate: { not: null },
+        onlineDateTime: { not: null },
+        configurationCompletedAt: { not: null },
+      },
+      data: { highlandsStatus: HighlandsStatus.DONE },
+    });
   }
   private where(q: QuerySitesDto): Prisma.SiteWhereInput {
     return {
@@ -30,6 +60,7 @@ export class SitesService {
     };
   }
   async list(q: QuerySitesDto) {
+    await this.syncCompletedStatuses();
     const where = this.where(q);
     const allowedSort = ['sitePossessionDate', 'onlineDateTime', 'infrastructureCompletedDate', 'province', 'storeName', 'createdAt', 'updatedAt'];
     const sortBy = allowedSort.includes(q.sortBy) ? q.sortBy : 'updatedAt';
@@ -47,6 +78,7 @@ export class SitesService {
     return { provinces: provinces.map((x) => x.province), storeTypes };
   }
   async get(id: number) {
+    await this.syncCompletedStatuses(id);
     const site = await this.prisma.site.findFirst({ where: { id, deletedAt: null }, include: { ...this.include, notes: { include: { createdBy: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } }, reminders: { include: { assignee: { select: { id: true, name: true } } }, orderBy: { dueAt: 'asc' } } } });
     if (!site) throw new NotFoundException('Không tìm thấy site');
     return this.sanitize(site);
@@ -73,7 +105,8 @@ export class SitesService {
   async create(dto: CreateSiteDto, user: AuthUser) {
     const duplicate = await this.duplicate(dto);
     if (duplicate && !dto.duplicateOverride) throw new ConflictException({ message: 'Có khả năng site này đã tồn tại', duplicate });
-    const site = await this.prisma.site.create({ data: this.data(dto, user.id, true) as Prisma.SiteUncheckedCreateInput, include: this.include });
+    const highlandsStatus = this.automaticStatus(dto as unknown as Record<string, unknown>, dto.highlandsStatus);
+    const site = await this.prisma.site.create({ data: this.data({ ...dto, highlandsStatus }, user.id, true) as Prisma.SiteUncheckedCreateInput, include: this.include });
     await this.audit.write({ userId: user.id }, 'CREATE_SITE', 'SITE', String(site.id));
     return this.sanitize(site);
   }
@@ -84,7 +117,10 @@ export class SitesService {
       const forbidden = Object.keys(dto).filter((key) => !allowed.has(key) && key !== 'duplicateOverride');
       if (forbidden.length) throw new ForbiddenException(`STAFF không được sửa: ${forbidden.join(', ')}`);
     }
-    const updated = await this.prisma.site.update({ where: { id }, data: this.data(dto, user.id, false) as Prisma.SiteUncheckedUpdateInput, include: this.include });
+    const merged = { ...(current as unknown as Record<string, unknown>), ...dto };
+    const requestedStatus = (dto.highlandsStatus ?? current.highlandsStatus) as HighlandsStatus;
+    const highlandsStatus = this.automaticStatus(merged, requestedStatus);
+    const updated = await this.prisma.site.update({ where: { id }, data: this.data({ ...dto, highlandsStatus }, user.id, false) as Prisma.SiteUncheckedUpdateInput, include: this.include });
     const changes: Record<string, { oldValue: unknown; newValue: unknown }> = {};
     for (const key of Object.keys(dto)) if (key !== 'pppoePassword' && key !== 'duplicateOverride' && JSON.stringify((current as Record<string, unknown>)[key]) !== JSON.stringify((updated as unknown as Record<string, unknown>)[key])) changes[key] = { oldValue: (current as Record<string, unknown>)[key], newValue: (updated as unknown as Record<string, unknown>)[key] };
     if (dto.pppoePassword) changes.pppoePassword = { oldValue: '[REDACTED]', newValue: '[REDACTED]' };
