@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
@@ -12,10 +13,12 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { SitesModule } from './sites/sites.module';
 import { UsersModule } from './users/users.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
     AuthModule,
@@ -26,6 +29,7 @@ import { UsersModule } from './users/users.module';
     AuditModule,
     RemindersModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },

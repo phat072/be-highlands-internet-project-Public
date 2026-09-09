@@ -26,7 +26,7 @@ export class UsersService {
   async update(id: number, dto: UpdateUserDto, actorId: number) {
     await this.get(id);
     const role = dto.role ? await this.prisma.role.findUnique({ where: { name: dto.role } }) : null;
-    const user = await this.prisma.user.update({ where: { id }, data: { name: dto.name?.trim(), phone: dto.phone, isActive: dto.isActive, roleId: role?.id, passwordHash: dto.password ? await argon2.hash(dto.password) : undefined, mustChangePassword: dto.password ? true : undefined, refreshTokenHash: dto.isActive === false ? null : undefined }, select: this.select });
+    const user = await this.prisma.user.update({ where: { id }, data: { name: dto.name?.trim(), phone: dto.phone, isActive: dto.isActive, roleId: role?.id, passwordHash: dto.password ? await argon2.hash(dto.password) : undefined, mustChangePassword: dto.password ? true : undefined, refreshTokenHash: dto.password || dto.isActive === false ? null : undefined }, select: this.select });
     await this.audit.write({ userId: actorId }, 'UPDATE_USER', 'USER', String(id));
     return user;
   }

@@ -65,27 +65,43 @@ model Role {
 }
 
 model User {
-  id                    Int        @id @default(autoincrement())
-  name                  String     @db.VarChar(120)
-  email                 String     @unique @db.VarChar(190)
-  passwordHash          String     @map("password_hash") @db.VarChar(255)
-  refreshTokenHash      String?    @map("refresh_token_hash") @db.VarChar(255)
-  phone                 String?    @db.VarChar(24)
-  roleId                Int        @map("role_id")
-  isActive              Boolean    @default(true) @map("is_active")
-  mustChangePassword    Boolean    @default(false) @map("must_change_password")
-  lastLoginAt           DateTime?  @map("last_login_at")
-  createdAt             DateTime   @default(now()) @map("created_at")
-  updatedAt             DateTime   @updatedAt @map("updated_at")
-  role                  Role       @relation(fields: [roleId], references: [id])
-  createdSites          Site[]     @relation("CreatedSites")
-  updatedSites          Site[]     @relation("UpdatedSites")
-  notes                 SiteNote[]
-  remindersAssigned     Reminder[] @relation("ReminderAssignee")
-  remindersCreated      Reminder[] @relation("ReminderCreator")
-  auditLogs             AuditLog[]
+  id                 Int                @id @default(autoincrement())
+  name               String             @db.VarChar(120)
+  email              String             @unique @db.VarChar(190)
+  passwordHash       String             @map("password_hash") @db.VarChar(255)
+  refreshTokenHash   String?            @map("refresh_token_hash") @db.VarChar(255)
+  phone              String?            @db.VarChar(24)
+  roleId             Int                @map("role_id")
+  isActive           Boolean            @default(true) @map("is_active")
+  mustChangePassword Boolean            @default(false) @map("must_change_password")
+  lastLoginAt        DateTime?          @map("last_login_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  role               Role               @relation(fields: [roleId], references: [id])
+  createdSites       Site[]             @relation("CreatedSites")
+  updatedSites       Site[]             @relation("UpdatedSites")
+  notes              SiteNote[]
+  remindersAssigned  Reminder[]         @relation("ReminderAssignee")
+  remindersCreated   Reminder[]         @relation("ReminderCreator")
+  auditLogs          AuditLog[]
+  passwordResetOtps  PasswordResetOtp[]
 
   @@map("users")
+}
+
+model PasswordResetOtp {
+  id        BigInt    @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  codeHash  String    @map("code_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at")
+  attempts  Int       @default(0)
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset_otps")
 }
 
 model StoreType {
@@ -99,41 +115,41 @@ model StoreType {
 }
 
 model Site {
-  id                              Int                  @id @default(autoincrement())
-  projectType                     ProjectType          @default(NSO) @map("project_type")
-  highlandsStatus                 HighlandsStatus     @default(PENDING) @map("highlands_status")
-  province                        String               @db.VarChar(100)
-  taxCode                         String?              @map("tax_code") @db.VarChar(30)
-  storeTypeId                     Int?                 @map("store_type_id")
-  storeName                       String               @map("store_name") @db.VarChar(190)
-  address                         String               @db.Text
-  sitePossessionDate              DateTime?            @map("site_possession_date") @db.Date
-  highlandsPicName                String?              @map("highlands_pic_name") @db.VarChar(120)
-  highlandsPicPhone               String?              @map("highlands_pic_phone") @db.VarChar(24)
-  viettelSignalHandoverDate       DateTime?            @map("viettel_signal_handover_date") @db.Date
-  ftelContractNumber              String?              @map("ftel_contract_number") @db.VarChar(80)
-  pppoeUsername                   String?              @map("pppoe_username") @db.VarChar(120)
-  pppoePasswordEncrypted          String?              @map("pppoe_password_encrypted") @db.Text
-  onlineDateTime                  DateTime?            @map("online_date_time")
-  configurationCompletedAt        DateTime?            @map("configuration_completed_at")
-  outdoorStatus                   InfrastructureStatus @default(NOT_STARTED) @map("outdoor_status")
-  indoorStatus                    InfrastructureStatus @default(NOT_STARTED) @map("indoor_status")
-  infrastructureCompletedDate     DateTime?            @map("infrastructure_completed_date") @db.Date
-  surveyContactPhone              String?              @map("survey_contact_phone") @db.VarChar(24)
-  note                            String?              @db.Text
-  issueStatus                     IssueStatus          @default(NONE) @map("issue_status")
-  issueContent                    String?              @map("issue_content") @db.Text
-  targetOnlineAt                  DateTime?            @map("target_online_at")
-  createdById                     Int                  @map("created_by")
-  updatedById                     Int                  @map("updated_by")
-  createdAt                       DateTime             @default(now()) @map("created_at")
-  updatedAt                       DateTime             @updatedAt @map("updated_at")
-  deletedAt                       DateTime?            @map("deleted_at")
-  storeType                       StoreType?           @relation(fields: [storeTypeId], references: [id])
-  createdBy                       User                 @relation("CreatedSites", fields: [createdById], references: [id])
-  updatedBy                       User                 @relation("UpdatedSites", fields: [updatedById], references: [id])
-  notes                           SiteNote[]
-  reminders                       Reminder[]
+  id                          Int                  @id @default(autoincrement())
+  projectType                 ProjectType          @default(NSO) @map("project_type")
+  highlandsStatus             HighlandsStatus      @default(PENDING) @map("highlands_status")
+  province                    String               @db.VarChar(100)
+  taxCode                     String?              @map("tax_code") @db.VarChar(30)
+  storeTypeId                 Int?                 @map("store_type_id")
+  storeName                   String               @map("store_name") @db.VarChar(190)
+  address                     String               @db.Text
+  sitePossessionDate          DateTime?            @map("site_possession_date") @db.Date
+  highlandsPicName            String?              @map("highlands_pic_name") @db.VarChar(120)
+  highlandsPicPhone           String?              @map("highlands_pic_phone") @db.VarChar(24)
+  viettelSignalHandoverDate   DateTime?            @map("viettel_signal_handover_date") @db.Date
+  ftelContractNumber          String?              @map("ftel_contract_number") @db.VarChar(80)
+  pppoeUsername               String?              @map("pppoe_username") @db.VarChar(120)
+  pppoePasswordEncrypted      String?              @map("pppoe_password_encrypted") @db.Text
+  onlineDateTime              DateTime?            @map("online_date_time")
+  configurationCompletedAt    DateTime?            @map("configuration_completed_at")
+  outdoorStatus               InfrastructureStatus @default(NOT_STARTED) @map("outdoor_status")
+  indoorStatus                InfrastructureStatus @default(NOT_STARTED) @map("indoor_status")
+  infrastructureCompletedDate DateTime?            @map("infrastructure_completed_date") @db.Date
+  surveyContactPhone          String?              @map("survey_contact_phone") @db.VarChar(24)
+  note                        String?              @db.Text
+  issueStatus                 IssueStatus          @default(NONE) @map("issue_status")
+  issueContent                String?              @map("issue_content") @db.Text
+  targetOnlineAt              DateTime?            @map("target_online_at")
+  createdById                 Int                  @map("created_by")
+  updatedById                 Int                  @map("updated_by")
+  createdAt                   DateTime             @default(now()) @map("created_at")
+  updatedAt                   DateTime             @updatedAt @map("updated_at")
+  deletedAt                   DateTime?            @map("deleted_at")
+  storeType                   StoreType?           @relation(fields: [storeTypeId], references: [id])
+  createdBy                   User                 @relation("CreatedSites", fields: [createdById], references: [id])
+  updatedBy                   User                 @relation("UpdatedSites", fields: [updatedById], references: [id])
+  notes                       SiteNote[]
+  reminders                   Reminder[]
 
   @@index([highlandsStatus])
   @@index([province])
